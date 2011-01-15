@@ -1,16 +1,21 @@
+var pageLocked = false;
+var recentScroll = false;
+
 $(document).ready(function(){
-    //detect column support
-    var yesCol = testColumns();
-    if (! yesCol){
-        $("#page").css("width","33em");
-    } 
 
     collate();
     
-    if ('ontouchstart' in window) {
-        //We've got a touch device here
-        $("#instruct").css("display","none");
+    if (Modernizr.touch) {
+        $("#pagedn").css("display","none");
     }
+
+    if (Modernizr.localstorage){
+        if (localStorage["did_instruct_down"]){
+            $("#pagedn").css("display","none");
+        }
+    }
+
+    Modernizr.addTest('hyphens',testHypenation);
     
     $(document).keypress(function(event) {
         handleKeyPress(event);
@@ -18,74 +23,90 @@ $(document).ready(function(){
     window.onresize = collate;
 });
 
-function testColumns() {
+function testHypenation() {
     //Blatantly stolen from Modernizr's code: http://www.modernizr.com/
     var modEl = document.createElement("div");
     var m_style = modEl.style;
     var domPrefixes = 'Webkit Moz O ms Khtml'.split(' ');
-    var prop = "columnCount"
+    var prop = "hyphens"
     var uc_prop = prop.charAt(0).toUpperCase() + prop.substr(1)
     var props = (prop + ' ' + domPrefixes.join(uc_prop + ' ') + uc_prop).split(' ');
 
     for (var i in props){
         if ( m_style[ props[i] ] !== undefined  ) {
-             return true;
+            //for some reason this passes on chrome when it shouldn't
+            if (navigator.userAgent.match(/Chrome\/8/)) {
+                return false;
+            }
+            return true;
         }
     }
     return false;
 }
 
-function collate() {
-    var all_readables = $(".collate");
-    var currentEmSize = getEmSize(all_readables[0]);
+function setupInstruction(){
+    var instructDown = $("<div>").html("Use &lt;space&gt; to scroll down.");
+    var instructUp   = $("<div>").html("&lt;shift&gt; + &lt;space&gt;");
     
-    var bigReadable;
-    var lastFakeMatch;
-    for (i=0; i < all_readables.length; i++){ 
-        var readable = all_readables[i];
-        var fakeMatch = readable.className.match(/fake\d+/);
-        var oldDiv;
-        if (fakeMatch){
-            if (lastFakeMatch != fakeMatch[0]){
-                lastFakeMatch = fakeMatch[0];
-                oldDiv = document.createElement("div");
-                oldDiv.className = "collate";
-                readable.parentNode.appendChild(oldDiv);
-            }
-            while (readable.children.length > 0) {
-                oldDiv.appendChild(readable.children[0]);
-            }
-            readable.parentNode.removeChild(readable);
-        }
-    }
-    // Excepting the first time, we've changed the lay of the land. 
-    all_readables = $(".collate");
+    instructDown.attr( "pagedn");
+    instructUp.attr( "pageup");
 
-    // If we are now thin, having only one column, kill collate.
-    if (window.innerWidth < (currentEmSize * 42)){
+    instructDown.className = "instruct";
+    instructUp.className = "instruct";
+
+    $("#page").append(instructDown);
+    $("#page").append(instructUp);
+}
+
+function collate() {
+    if (pageLocked){
         return;
     }
+    pageLocked = true;
+    var all_readables = $(".collate");
+    for (i=0; i<all_readables.length; i++) {
+        var readable = all_readables[i];
+        //have to do this before deleting fakes or scroll position is lost. 
+        readable.style.display = "block";
+    }
+
+    //kill all fakes
+    var all_fakes = $(".fake");
+    for (var i = 0; i < all_fakes.length; i ++){
+        var fake = all_fakes[i];
+        fake.parentNode.removeChild(fake);
+    }
+
+    var currentEmSize = getEmSize($("#page")[0]);
 
     var target_height = window.innerHeight - (currentEmSize * 6)
 
     for (i=0; i<all_readables.length; i++) {
         var readable = all_readables[i];
 
+        if (window.innerWidth < (currentEmSize * 42)){
+            continue;
+        }
+        
         var readable_height = readable.offsetHeight;
 
         var page_ratio = target_height / readable_height;
         if (page_ratio >= 1){
-            readable.className += " page";
+            //TODO: this blows away any other classes you may have given the
+            //collate div. You probably shouldn't do that, but still. 
+            readable.className = "collate page";
+            readable.style.height = target_height.toString() + "px";
+
             continue;
         }
+        readable.className = "collate";
 
         var firstDiv = document.createElement("div");
-        //tag the collateing div with fake and a number so we can recreate it.
-        firstDiv.className = "collate page fake" + i.toString();
+        firstDiv.className = "collate page fake"; 
         readable.parentNode.appendChild(firstDiv);
         var currentChild;
-        while (readable.children.length > 0){
-            currentChild = readable.children[0];
+        for (var k=0; k < readable.children.length ; k++ ){
+            currentChild = readable.children[k].cloneNode(true);
             firstDiv.appendChild(currentChild);
             if (firstDiv.offsetHeight > target_height){
                 firstDiv.removeChild(currentChild);
@@ -101,7 +122,7 @@ function collate() {
                 //smaller elements. (might have to write an html parser for
                 //that).
                 firstDiv = document.createElement("div");
-                firstDiv.className = "collate page fake" + i.toString();
+                firstDiv.className = "collate page fake";
                 readable.parentNode.appendChild(firstDiv);
                 if (headingGuy){
                     firstDiv.appendChild(headingGuy);
@@ -110,33 +131,26 @@ function collate() {
                 firstDiv.appendChild(currentChild);
             }
         }
-        console.log(readable);
-        readable.parentNode.removeChild(readable);
         firstDiv.style.height = target_height.toString() + "px";
+        readable.style.display = "none";
 
     }
+    pageLocked = false;
 
 }
 
 
-//http://eriwen.com/javascript/measure-ems-for-layout/
+//http://stackoverflow.com/questions/4571813/why-is-this-javascript-function-so-slow-on-firefox
 function getEmSize(el) {
-    var tempDiv = document.createElement("div");
-    tempDiv.style.height = "1em";
-    el.appendChild(tempDiv);
-    var emSize = tempDiv.offsetHeight;
-    el.removeChild(tempDiv);
-    return emSize;
+    return Number(getComputedStyle(el, "").fontSize.match(/(\d+)px/)[1]);
 }
 
 //http://radio.javaranch.com/pascarello/2005/01/09/1105293729000.html
 //Make it fuzzy, back up by a couple em.
 function scrollToElement(theElement){
-    //console.log(theElement);
     var origElement = theElement;
 
     var offsetY = getDivTop(theElement);
-    //console.log(offsetY);
 
     //window.scrollTo(selectedPosX, selectedPosY - 4 * getEmSize(origElement));
     $.scrollTo(offsetY - 4 * getEmSize(origElement), 400);
@@ -167,18 +181,26 @@ function handleKeyPress(e) {
     }
 
     if (e.which == 106 || (e.which == 32 && ! e.shiftKey) || e.which == 115){
-        $("#instruct").css("opacity",0);
         scrollDown();
     }
     if (e.which == 107 || ( e.which == 32 && e.shiftKey) || e.which == 119){
-        //console.log("k");
-        $("#instruct").css("opacity",0);
         scrollUp();
     }
 
 }
 
 function scrollDown(){
+    $("#pagedn").css("opacity",0);
+    if (Modernizr.localstorage){
+        localStorage["did_instruct_down"] = true;
+    }
+
+    if (recentScroll){
+        instructUp();
+    }
+    recentScroll = true;
+    setTimeout(function() { recentScroll = false; } , 10000);
+    
     var all_pages = document.getElementsByClassName("page"); 
     if (window.pageYOffset == 0){
         scrollToElement(all_pages[0]);
@@ -204,9 +226,8 @@ function scrollDown(){
         }
     }
     if (nextDiv == null){
-        $.scrollTo('+=1000px',100);
-        //$.scrollTo('+=10px',100);
-        //$.scrollTo('-=10px',100);
+        $.scrollTo('100%',400);
+        instructUp();
         return;
     }
 
@@ -215,6 +236,11 @@ function scrollDown(){
 }
 
 function scrollUp(){
+    $("#pageup").css("opacity",0);
+    if (Modernizr.localstorage){
+        localStorage["did_instruct_up"] = true;
+    }
+
     var all_pages = document.getElementsByClassName("page"); 
     var nextDiv;
     for (i = all_pages.length - 1; i >= 0; i--){
@@ -241,3 +267,18 @@ function scrollUp(){
 
     scrollToElement(nextDiv);
 }
+
+
+function instructUp(){
+    if (Modernizr.localstorage){
+        if (localStorage["did_instruct_up"]){
+            return;
+        }
+        localStorage["did_instruct_up"] = true;
+    }
+
+    $("#pageup").css("opacity",1);
+    setTimeout(function() {$("#pageup").css("opacity",0);} , 2000);
+
+}
+

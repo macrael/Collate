@@ -8,24 +8,34 @@
 <meta name="viewport" content="width=device-width">
 <script type="text/javascript" src="jquery-1.4.4.js"></script>
 <script type="text/javascript" src="jquery.scrollTo-1.4.2.js"></script>
+<script type="text/javascript" src="modernizr-1.6.min.js"></script>
 <script type="text/javascript" src="collate.js"></script>
 </head>
 <body>
 <div id="page">
 
-<div id="instruct" >
-Use &lt;space&gt; to scroll down.
-</div>
-
 <h1>Collate</h1>
 <div class="collate">
 <p>This is a demonstration of collate, a javascript and css implementation of
 paginated columns on the web. In order to use this yourself, just use the code
-in these two files, along with the jquery and jquery-scroll-to dependencies.
+in these two files, along with the jquery and jquery-scroll-to and modernizr dependencies.
 All you have to do is add the &ldquo;collate&rdquo; class to a div and the text
 inside will be put into columns and broken into pages based on the size of your
-browser window.</p>
+browser window. For now, you also need to add the divs with the id's 'pageup' and 'pagedn' 
+that are in this file to the bottom of your document, but that will go away in a future
+release</p>
 
+<p>When this was first introduced, I wrote a long post about the motivations
+behind this. You can see that <a href="http://macrael.com/blah">here</a> 
+You are looking at the result of this code. Columns, broken into pages,
+with scrolling assisted by javascript. Use the spacebar/shift-space or j/k to 
+activate scrolling. There are little instructions to guide you to with scrolling
+they will only be shown you once, it uses localStorage to do so. </p>
+
+<p>Please use <a href="http://github.com/macrael/collate">github</a> to track
+issues. </p>
+
+<h2>The Lorem</h2>
 <p>
 Lorem ipsum dolor sit amet, consectetur adipiscing elit. Vestibulum ut mi
 lorem. Pellentesque facilisis leo quis ipsum euismod vitae pharetra tortor
@@ -160,5 +170,13 @@ volutpat.
 </p>
 
 </div> <!--page -->
+<div id="pagedn" class="instruct" >
+Use &lt;space&gt; to scroll down.
+</div>
+
+<div id="pageup" class="instruct">
+&lt;shift&gt; + &lt;space&gt;
+</div>
+
 </body>
 </html>
